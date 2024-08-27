@@ -85,6 +85,12 @@
 #include <sys/kcov.h>
 #endif
 
+#ifdef HAVE_OPENAT2_H
+#include <linux/openat2.h>
+/* glibc has no header for SYS_openat2 so we need to get it via syscall.h */
+#include <sys/syscall.h>
+#endif
+
 #define termios host_termios
 #define winsize host_winsize
 #define termio host_termio
@@ -653,6 +659,10 @@ safe_syscall3(ssize_t, read, int, fd, void *, buff, size_t, count)
 safe_syscall3(ssize_t, write, int, fd, const void *, buff, size_t, count)
 safe_syscall4(int, openat, int, dirfd, const char *, pathname, \
               int, flags, mode_t, mode)
+#ifdef HAVE_OPENAT2_H
+safe_syscall4(int, openat2, int, dirfd, const char *, pathname, \
+              const struct open_how *, how, size_t, size);
+#endif
 #if defined(TARGET_NR_wait4) || defined(TARGET_NR_waitpid)
 safe_syscall4(pid_t, wait4, pid_t, pid, int *, status, int, options, \
               struct rusage *, rusage)
@@ -8334,8 +8344,9 @@ static int open_net_route(CPUArchState *cpu_env, int fd)
 }
 #endif
 
-int do_guest_openat(CPUArchState *cpu_env, int dirfd, const char *fname,
-                    int flags, mode_t mode, bool safe)
+static int maybe_do_fake_open(CPUArchState *cpu_env, int dirfd,
+                              const char *fname, int flags, mode_t mode,
+                              bool safe)
 {
     g_autofree char *proc_name = NULL;
     const char *pathname;
@@ -8418,12 +8429,47 @@ int do_guest_openat(CPUArchState *cpu_env, int dirfd, const char *fname,
         return fd;
     }
 
+    return -1;
+}
+
+int do_guest_openat(CPUArchState *cpu_env, int dirfd, const char *fname,
+                    int flags, mode_t mode, bool safe)
+{
+    int fd = maybe_do_fake_open(cpu_env, dirfd, fname, flags, mode, safe);
+    if (fd >= 0)
+        return fd;
+
     if (safe) {
-        return safe_openat(dirfd, path(pathname), flags, mode);
+        return safe_openat(dirfd, path(fname), flags, mode);
     } else {
-        return openat(dirfd, path(pathname), flags, mode);
+        return openat(dirfd, path(fname), flags, mode);
     }
 }
+
+#ifdef HAVE_OPENAT2_H
+int do_guest_openat2(CPUArchState *cpu_env, int dirfd, const char *fname,
+                     struct target_open_how *how, bool safe)
+{
+    /*
+     * Ideally we would pass "how->resolve" flags into this helper too but
+     * the lookup for files that need faking is based on "realpath()" so
+     * neither a dirfd for "proc" nor restrictions via "resolve" flags can
+     * be honored right now.
+     */
+    int fd = maybe_do_fake_open(cpu_env, dirfd, fname, how->flags, how->mode,
+                                safe);
+    if (fd >= 0)
+        return fd;
+
+    if (safe) {
+        return safe_openat2(dirfd, fname, (struct open_how *)how,
+                            sizeof(struct target_open_how));
+    } else {
+        return syscall(SYS_openat2, dirfd, fname, (struct open_hosw *)how,
+                       sizeof(struct target_open_how));
+    }
+}
+#endif
 
 ssize_t do_guest_readlink(const char *pathname, char *buf, size_t bufsiz)
 {
@@ -9197,6 +9243,25 @@ static abi_long do_syscall1(CPUArchState *cpu_env, int num, abi_long arg1,
         fd_trans_unregister(ret);
         unlock_user(p, arg2, 0);
         return ret;
+#if defined(TARGET_NR_openat2) && defined(HAVE_OPENAT2_H)
+    case TARGET_NR_openat2:
+        {
+            struct target_open_how how, *target_how;
+            if (!(p = lock_user_string(arg2)))
+                return -TARGET_EFAULT;
+            if (!(lock_user_struct(VERIFY_READ, target_how, arg3, 1)))
+                return -TARGET_EFAULT;
+            how.flags = target_to_host_bitmask(target_how->flags,
+                                               fcntl_flags_tbl);
+            how.mode = tswap64(target_how->mode);
+            how.resolve = tswap64(target_how->resolve);
+            ret = get_errno(do_guest_openat2(cpu_env, arg1, p, &how, true));
+            fd_trans_unregister(ret);
+            unlock_user_struct(target_how, arg3, 0);
+            unlock_user(p, arg2, 0);
+            return ret;
+        }
+#endif
 #if defined(TARGET_NR_name_to_handle_at) && defined(CONFIG_OPEN_BY_HANDLE)
     case TARGET_NR_name_to_handle_at:
         ret = do_name_to_handle_at(arg1, arg2, arg3, arg4, arg5);
