@@ -9197,6 +9197,28 @@ static abi_long do_syscall1(CPUArchState *cpu_env, int num, abi_long arg1,
         fd_trans_unregister(ret);
         unlock_user(p, arg2, 0);
         return ret;
+#ifdef TARGET_NR_openat2
+    case TARGET_NR_openat2:
+        {
+            struct target_open_how *target_how;
+            if (!(p = lock_user_string(arg2)))
+               return -TARGET_EFAULT;
+            if (!(lock_user_struct(VERIFY_READ, target_how, arg3, 1)))
+                return -TARGET_EFAULT;
+            // XXX: implement the resolve flags
+            if (target_how->resolve != 0) {
+                    qemu_log("unsupported openat2 resolve flags %llu \n", target_how->resolve);
+                    return -TARGET_ENOSYS;
+            }
+            ret = get_errno(do_guest_openat(cpu_env, arg1, p,
+                                            target_to_host_bitmask(target_how->flags, fcntl_flags_tbl),
+                                            target_how->mode, true));
+            fd_trans_unregister(ret);
+            unlock_user_struct(target_how, arg3, 0);
+            unlock_user(p, arg2, 0);
+            return ret;
+        }
+#endif
 #if defined(TARGET_NR_name_to_handle_at) && defined(CONFIG_OPEN_BY_HANDLE)
     case TARGET_NR_name_to_handle_at:
         ret = do_name_to_handle_at(arg1, arg2, arg3, arg4, arg5);
