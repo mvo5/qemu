@@ -9247,7 +9247,7 @@ static abi_long do_syscall1(CPUArchState *cpu_env, int num, abi_long arg1,
             
             ret = get_errno(do_guest_openat2(cpu_env, arg1, p,
                                              &how, true));
-            qemu_log("openat2 returned %li\n", ret);
+            qemu_log("openat2 returned %li %i for %s\n", ret, errno, (char*)p);
             
             fd_trans_unregister(ret);
             unlock_user_struct(target_how, arg3, 0);
