@@ -85,6 +85,10 @@
 #include <sys/kcov.h>
 #endif
 
+#ifdef HAVE_OPENAT2_H
+#include <linux/openat2.h>
+#endif
+
 #define termios host_termios
 #define winsize host_winsize
 #define termio host_termio
@@ -653,6 +657,10 @@ safe_syscall3(ssize_t, read, int, fd, void *, buff, size_t, count)
 safe_syscall3(ssize_t, write, int, fd, const void *, buff, size_t, count)
 safe_syscall4(int, openat, int, dirfd, const char *, pathname, \
               int, flags, mode_t, mode)
+#ifdef HAVE_OPENAT2_H
+safe_syscall4(int, openat2, int, dirfd, const char *, pathname, \
+              const struct open_how *, how, size_t, size);
+#endif
 #if defined(TARGET_NR_wait4) || defined(TARGET_NR_waitpid)
 safe_syscall4(pid_t, wait4, pid_t, pid, int *, status, int, options, \
               struct rusage *, rusage)
