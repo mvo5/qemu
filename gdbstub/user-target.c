@@ -311,8 +311,11 @@ void gdb_handle_v_file_open(GArray *params, void *user_ctx)
     uint64_t mode = gdb_get_cmd_param(params, 2)->val_ull;
 
 #ifdef CONFIG_LINUX
-    int fd = do_guest_openat(cpu_env(gdbserver_state.g_cpu), 0, filename,
-                             flags, mode, false);
+    struct target_open_how how;
+    how.flags = flags;
+    how.mode = mode;
+    int fd = do_guest_openat2(cpu_env(gdbserver_state.g_cpu), 0, filename,
+                              &how, false);
 #else
     int fd = open(filename, flags, mode);
 #endif

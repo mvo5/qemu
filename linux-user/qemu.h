@@ -162,8 +162,8 @@ struct TaskState {
 };
 
 abi_long do_brk(abi_ulong new_brk);
-int do_guest_openat(CPUArchState *cpu_env, int dirfd, const char *pathname,
-                    int flags, mode_t mode, bool safe);
+int do_guest_openat2(CPUArchState *cpu_env, int dirfd, const char *pathname,
+                     struct target_open_how *how, bool safe);
 ssize_t do_guest_readlink(const char *pathname, char *buf, size_t bufsiz);
 
 /* user access */

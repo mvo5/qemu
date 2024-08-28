@@ -149,6 +149,9 @@
 #include "fd-trans.h"
 #include "cpu_loop-common.h"
 
+// XXX: hack to get SYS_openat2
+#include <sys/syscall.h>
+
 #ifndef CLONE_IO
 #define CLONE_IO                0x80000000      /* Clone io context */
 #endif
@@ -8342,8 +8345,8 @@ static int open_net_route(CPUArchState *cpu_env, int fd)
 }
 #endif
 
-int do_guest_openat(CPUArchState *cpu_env, int dirfd, const char *fname,
-                    int flags, mode_t mode, bool safe)
+int do_guest_openat2(CPUArchState *cpu_env, int dirfd, const char *fname,
+                     struct target_open_how *how, bool safe)
 {
     g_autofree char *proc_name = NULL;
     const char *pathname;
@@ -8381,9 +8384,10 @@ int do_guest_openat(CPUArchState *cpu_env, int dirfd, const char *fname,
 
     if (is_proc_myself(pathname, "exe")) {
         if (safe) {
-            return safe_openat(dirfd, exec_path, flags, mode);
+            //XXX: move to openat2?
+            return safe_openat(dirfd, exec_path, how->flags, how->mode);
         } else {
-            return openat(dirfd, exec_path, flags, mode);
+            return openat(dirfd, exec_path, how->flags, how->mode);
         }
     }
 
@@ -8426,10 +8430,13 @@ int do_guest_openat(CPUArchState *cpu_env, int dirfd, const char *fname,
         return fd;
     }
 
+    // XXX: using openat2 for everything is not pratical as it will error
+    // when conflicting or unknown flags are encountered
     if (safe) {
-        return safe_openat(dirfd, path(pathname), flags, mode);
+            return safe_openat2(dirfd, path(pathname), (struct open_how *)how, sizeof(struct open_how));
     } else {
-        return openat(dirfd, path(pathname), flags, mode);
+        //XXX: wrapper
+        return syscall(SYS_openat2, dirfd, path(pathname), (struct open_hosw *)how, sizeof(struct open_how));
     }
 }
 
@@ -9187,40 +9194,42 @@ static abi_long do_syscall1(CPUArchState *cpu_env, int num, abi_long arg1,
 
 #ifdef TARGET_NR_open
     case TARGET_NR_open:
-        if (!(p = lock_user_string(arg1)))
-            return -TARGET_EFAULT;
-        ret = get_errno(do_guest_openat(cpu_env, AT_FDCWD, p,
-                                  target_to_host_bitmask(arg2, fcntl_flags_tbl),
-                                  arg3, true));
-        fd_trans_unregister(ret);
-        unlock_user(p, arg1, 0);
-        return ret;
+        {
+            struct target_open_how how = {0};
+            if (!(p = lock_user_string(arg1)))
+                return -TARGET_EFAULT;
+            how.flags = target_to_host_bitmask(arg2, fcntl_flags_tbl);
+            how.mode= args3;
+            ret = get_errno(do_guest_openat2(cpu_env, AT_FDCWD, p,
+                                            &how, true);
+            fd_trans_unregister(ret);
+            unlock_user(p, arg1, 0);
+            return ret;
+        }
 #endif
     case TARGET_NR_openat:
-        if (!(p = lock_user_string(arg2)))
-            return -TARGET_EFAULT;
-        ret = get_errno(do_guest_openat(cpu_env, arg1, p,
-                                  target_to_host_bitmask(arg3, fcntl_flags_tbl),
-                                  arg4, true));
-        fd_trans_unregister(ret);
-        unlock_user(p, arg2, 0);
-        return ret;
+        {
+            struct target_open_how how = {0};
+            if (!(p = lock_user_string(arg2)))
+                return -TARGET_EFAULT;
+            how.flags = target_to_host_bitmask(arg3, fcntl_flags_tbl);
+            how.mode= arg4;
+            ret = get_errno(do_guest_openat2(cpu_env, arg1, p,
+                                            &how, true));
+            fd_trans_unregister(ret);
+            unlock_user(p, arg2, 0);
+            return ret;
+        }
 #ifdef TARGET_NR_openat2
     case TARGET_NR_openat2:
         {
-            struct target_open_how *target_how;
+            struct open_how *target_how;
             if (!(p = lock_user_string(arg2)))
                return -TARGET_EFAULT;
             if (!(lock_user_struct(VERIFY_READ, target_how, arg3, 1)))
                 return -TARGET_EFAULT;
-            // XXX: implement the resolve flags
-            if (target_how->resolve != 0) {
-                    qemu_log("unsupported openat2 resolve flags %llu \n", target_how->resolve);
-                    return -TARGET_ENOSYS;
-            }
-            ret = get_errno(do_guest_openat(cpu_env, arg1, p,
-                                            target_to_host_bitmask(target_how->flags, fcntl_flags_tbl),
-                                            target_how->mode, true));
+            ret = get_errno(do_guest_openat2(cpu_env, arg1, p,
+                                             (struct target_open_how *)target_how, true));
             fd_trans_unregister(ret);
             unlock_user_struct(target_how, arg3, 0);
             unlock_user(p, arg2, 0);
