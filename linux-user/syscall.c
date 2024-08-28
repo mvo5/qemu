@@ -466,11 +466,13 @@ static const bitmask_transtbl fcntl_flags_tbl[] = {
 };
 
 #ifdef HAVE_OPENAT2_H
+/*
 static const bitmask_transtbl openat2_resolve_flags_tbl[] = {
    { TARGET_RESOLVE_BENEATH, TARGET_RESOLVE_IN_ROOT, RESOLVE_BENEATH, RESOLVE_IN_ROOT },
    { TARGET_RESOLVE_NO_MAGICLINKS, TARGET_RESOLVE_NO_SYMLINKS, RESOLVE_NO_MAGICLINKS, RESOLVE_NO_SYMLINKS },
    { TARGET_RESOLVE_NO_XDEV, TARGET_RESOLVE_CACHED, RESOLVE_NO_XDEV, RESOLVE_CACHED },
 };
+*/
 #endif
 
 _syscall2(int, sys_getcwd1, char *, buf, size_t, size)
@@ -9231,14 +9233,22 @@ static abi_long do_syscall1(CPUArchState *cpu_env, int num, abi_long arg1,
 #ifdef TARGET_NR_openat2
     case TARGET_NR_openat2:
         {
-            struct open_how *target_how;
+            struct target_open_how how, *target_how;
             if (!(p = lock_user_string(arg2)))
                return -TARGET_EFAULT;
             if (!(lock_user_struct(VERIFY_READ, target_how, arg3, 1)))
                 return -TARGET_EFAULT;
-            target_how->resolve = target_to_host_bitmask(arg3, openat2_resolve_flags_tbl);
+            //target_how->resolve = target_to_host_bitmask(arg3, openat2_resolve_flags_tbl);
+            how.flags = target_to_host_bitmask(target_how->flags, fcntl_flags_tbl);
+            how.mode = target_how->mode;
+            how.resolve = target_how->resolve;
+            
+            qemu_log("how: %p %p, %llu %llu %llu %llu %llu %llu\n", (void*)arg3, target_how, ((struct open_how*)arg3)->flags, target_how->flags, ((struct open_how*)arg3)->mode, target_how->mode, ((struct open_how*)arg3)->resolve, target_how->resolve);
+            
             ret = get_errno(do_guest_openat2(cpu_env, arg1, p,
-                                             (struct target_open_how *)target_how, true));
+                                             &how, true));
+            qemu_log("openat2 returned %li\n", ret);
+            
             fd_trans_unregister(ret);
             unlock_user_struct(target_how, arg3, 0);
             unlock_user(p, arg2, 0);
