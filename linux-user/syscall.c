@@ -9240,8 +9240,8 @@ static abi_long do_syscall1(CPUArchState *cpu_env, int num, abi_long arg1,
                 return -TARGET_EFAULT;
             //target_how->resolve = target_to_host_bitmask(arg3, openat2_resolve_flags_tbl);
             how.flags = target_to_host_bitmask(target_how->flags, fcntl_flags_tbl);
-            how.mode = target_how->mode;
-            how.resolve = target_how->resolve;
+            how.mode = tswap64(target_how->mode);
+            how.resolve = tswap64(target_how->resolve);
             
             qemu_log("how: %p %p, %llu %llu %llu %llu %llu %llu\n", (void*)arg3, target_how, ((struct open_how*)arg3)->flags, target_how->flags, ((struct open_how*)arg3)->mode, target_how->mode, ((struct open_how*)arg3)->resolve, target_how->resolve);
             
