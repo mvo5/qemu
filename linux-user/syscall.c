@@ -465,6 +465,14 @@ static const bitmask_transtbl fcntl_flags_tbl[] = {
 #endif
 };
 
+#ifdef HAVE_OPENAT2_H
+static const bitmask_transtbl openat2_resolve_flags_tbl[] = {
+   { TARGET_RESOLVE_BENEATH, TARGET_RESOLVE_IN_ROOT, RESOLVE_BENEATH, RESOLVE_IN_ROOT },
+   { TARGET_RESOLVE_NO_MAGICLINKS, TARGET_RESOLVE_NO_SYMLINKS, RESOLVE_NO_MAGICLINKS, RESOLVE_NO_SYMLINKS },
+   { TARGET_RESOLVE_NO_XDEV, TARGET_RESOLVE_CACHED, RESOLVE_NO_XDEV, RESOLVE_CACHED },
+};
+#endif
+
 _syscall2(int, sys_getcwd1, char *, buf, size_t, size)
 
 #if defined(TARGET_NR_utimensat) || defined(TARGET_NR_utimensat_time64)
@@ -9228,6 +9236,7 @@ static abi_long do_syscall1(CPUArchState *cpu_env, int num, abi_long arg1,
                return -TARGET_EFAULT;
             if (!(lock_user_struct(VERIFY_READ, target_how, arg3, 1)))
                 return -TARGET_EFAULT;
+            target_how->resolve = target_to_host_bitmask(arg3, openat2_resolve_flags_tbl);
             ret = get_errno(do_guest_openat2(cpu_env, arg1, p,
                                              (struct target_open_how *)target_how, true));
             fd_trans_unregister(ret);

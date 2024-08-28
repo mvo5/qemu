@@ -149,4 +149,13 @@ struct target_flock64 {
 };
 #endif
 
+// XXX: wrong place
+#define TARGET_RESOLVE_NO_XDEV         0x01
+#define TARGET_RESOLVE_NO_MAGICLINKS   0x02
+#define TARGET_RESOLVE_NO_SYMLINKS     0x04
+#define TARGET_RESOLVE_BENEATH         0x08
+#define TARGET_RESOLVE_IN_ROOT         0x10
+#define TARGET_RESOLVE_CACHED          0x20
+
+
 #endif
