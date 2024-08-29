@@ -2754,11 +2754,4 @@ struct target_sched_param {
     abi_int sched_priority;
 };
 
-/* from kernel's include/uapi/linux/openat2.h */
-struct target_open_how {
-    __u64 flags;
-    __u64 mode;
-    __u64 resolve;
-};
-
 #endif

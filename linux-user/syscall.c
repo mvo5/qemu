@@ -8447,8 +8447,8 @@ int do_guest_openat(CPUArchState *cpu_env, int dirfd, const char *fname,
 }
 
 #ifdef HAVE_OPENAT2_H
-int do_guest_openat2(CPUArchState *cpu_env, int dirfd, const char *fname,
-                     struct target_open_how *how)
+static int do_guest_openat2(CPUArchState *cpu_env, int dirfd, const char *fname,
+                            struct open_how *how)
 {
     /*
      * Ideally we would pass "how->resolve" flags into this helper too but
@@ -8461,8 +8461,7 @@ int do_guest_openat2(CPUArchState *cpu_env, int dirfd, const char *fname,
     if (fd >= 0)
         return fd;
 
-    return safe_openat2(dirfd, fname, (struct open_how *)how,
-                        sizeof(struct target_open_how));
+    return safe_openat2(dirfd, fname, how, sizeof(struct open_how));
 }
 #endif
 
@@ -9241,7 +9240,7 @@ static abi_long do_syscall1(CPUArchState *cpu_env, int num, abi_long arg1,
 #if defined(TARGET_NR_openat2) && defined(HAVE_OPENAT2_H)
     case TARGET_NR_openat2:
         {
-            struct target_open_how how, *target_how;
+            struct open_how how = {0}, *target_how;
             if (!(p = lock_user_string(arg2)))
                 return -TARGET_EFAULT;
             if (!(lock_user_struct(VERIFY_READ, target_how, arg3, 1)))
