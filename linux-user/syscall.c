@@ -8448,7 +8448,7 @@ int do_guest_openat(CPUArchState *cpu_env, int dirfd, const char *fname,
 
 #ifdef HAVE_OPENAT2_H
 int do_guest_openat2(CPUArchState *cpu_env, int dirfd, const char *fname,
-                     struct target_open_how *how, bool safe)
+                     struct target_open_how *how)
 {
     /*
      * Ideally we would pass "how->resolve" flags into this helper too but
@@ -8457,17 +8457,12 @@ int do_guest_openat2(CPUArchState *cpu_env, int dirfd, const char *fname,
      * be honored right now.
      */
     int fd = maybe_do_fake_open(cpu_env, dirfd, fname, how->flags, how->mode,
-                                safe);
+                                true);
     if (fd >= 0)
         return fd;
 
-    if (safe) {
-        return safe_openat2(dirfd, fname, (struct open_how *)how,
-                            sizeof(struct target_open_how));
-    } else {
-        return syscall(SYS_openat2, dirfd, fname, (struct open_hosw *)how,
-                       sizeof(struct target_open_how));
-    }
+    return safe_openat2(dirfd, fname, (struct open_how *)how,
+                        sizeof(struct target_open_how));
 }
 #endif
 
@@ -9255,7 +9250,7 @@ static abi_long do_syscall1(CPUArchState *cpu_env, int num, abi_long arg1,
                                                fcntl_flags_tbl);
             how.mode = tswap64(target_how->mode);
             how.resolve = tswap64(target_how->resolve);
-            ret = get_errno(do_guest_openat2(cpu_env, arg1, p, &how, true));
+            ret = get_errno(do_guest_openat2(cpu_env, arg1, p, &how));
             fd_trans_unregister(ret);
             unlock_user_struct(target_how, arg3, 0);
             unlock_user(p, arg2, 0);
